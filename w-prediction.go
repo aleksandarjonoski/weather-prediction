@@ -349,16 +349,13 @@ func dominantWeather(counts map[string]int) (string, string) {
 	return best, desc
 }
 
-func (p *WeatherPredictor) todayProxy() DailyRecord {
-	today := time.Now()
-	todayDOY := today.YearDay()
-
+func (p *WeatherPredictor) proxyForDOY(doy int, date time.Time) DailyRecord {
 	var temp, dewPoint, feelsLike, pressure, humidity, windSpeed, clouds float64
 	var tempMin, tempMax float64
 	count := 0
 
 	for _, d := range p.DailyData {
-		if d.Date.YearDay() == todayDOY {
+		if d.Date.YearDay() == doy {
 			temp += d.Temp
 			dewPoint += d.DewPoint
 			feelsLike += d.FeelsLike
@@ -378,7 +375,7 @@ func (p *WeatherPredictor) todayProxy() DailyRecord {
 
 	n := float64(count)
 	return DailyRecord{
-		Date:      today,
+		Date:      date,
 		Temp:      temp / n,
 		TempMin:   tempMin / n,
 		TempMax:   tempMax / n,
@@ -389,6 +386,11 @@ func (p *WeatherPredictor) todayProxy() DailyRecord {
 		WindSpeed: windSpeed / n,
 		Clouds:    clouds / n,
 	}
+}
+
+func (p *WeatherPredictor) todayProxy() DailyRecord {
+	today := time.Now()
+	return p.proxyForDOY(today.YearDay(), today)
 }
 
 func (p *WeatherPredictor) PredictTomorrow() Prediction {
@@ -410,6 +412,38 @@ func (p *WeatherPredictor) PredictTomorrow() Prediction {
 
 	return Prediction{
 		Date:        tomorrow.Format("2006-01-02"),
+		City:        "Kavadarci",
+		TempAvg:     round(tempAvg),
+		TempMin:     round(tempMin),
+		TempMax:     round(tempMax),
+		FeelsLike:   round(feelsLike),
+		Humidity:    round(humidity),
+		WindSpeed:   round(windSpeed),
+		Pressure:    round(pressure),
+		WeatherMain: weatherMain,
+		WeatherDesc: weatherDesc,
+	}
+}
+
+func (p *WeatherPredictor) PredictForDate(target time.Time) Prediction {
+	dayBefore := target.AddDate(0, 0, -1)
+	proxy := p.proxyForDOY(dayBefore.YearDay(), dayBefore)
+	features := extractFeatures(proxy)
+
+	tempAvg := p.predictValue(p.TempModel, features, p.TempMean, p.TempStd)
+	tempMin := p.predictValue(p.TempMinModel, features, p.TempMinMean, p.TempMinStd)
+	tempMax := p.predictValue(p.TempMaxModel, features, p.TempMaxMean, p.TempMaxStd)
+	feelsLike := p.predictValue(p.FeelsLikeModel, features, p.FeelsLikeMean, p.FeelsLikeStd)
+	humidity := p.predictValue(p.HumidityModel, features, p.HumidityMean, p.HumidityStd)
+	pressure := p.predictValue(p.PressureModel, features, p.PressureMean, p.PressureStd)
+	windSpeed := p.predictValue(p.WindModel, features, p.WindMean, p.WindStd)
+
+	weatherMain, weatherDesc := p.predictWeather(int(target.Month()), tempAvg)
+
+	round := func(v float64) float64 { return math.Round(v*10) / 10 }
+
+	return Prediction{
+		Date:        target.Format("2006-01-02"),
 		City:        "Kavadarci",
 		TempAvg:     round(tempAvg),
 		TempMin:     round(tempMin),
@@ -536,19 +570,41 @@ func main() {
 	fmt.Printf("  Conditions: %s (%s)\n", pred.WeatherMain, pred.WeatherDesc)
 
 	fmt.Println("\nServer running on http://localhost:8080")
-	fmt.Println("  curl localhost:8080                  # text output")
-	fmt.Println("  curl localhost:8080/predict           # JSON output")
-	fmt.Println("  curl localhost:8080/predict/tomorrow   # JSON output")
+	fmt.Println("  curl localhost:8080                          # text output")
+	fmt.Println("  curl localhost:8080/predict                   # JSON output (tomorrow)")
+	fmt.Println("  curl localhost:8080/predict/tomorrow           # JSON output (tomorrow)")
+	fmt.Println("  curl localhost:8080/predict/2026-05-15         # JSON output (specific date)")
 
-	serveJSON := func(w http.ResponseWriter, r *http.Request) {
+	serveTomorrowJSON := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		enc.Encode(predictor.PredictTomorrow())
 	}
 
-	http.HandleFunc("/predict/tomorrow", serveJSON)
-	http.HandleFunc("/predict", serveJSON)
+	http.HandleFunc("/predict/tomorrow", serveTomorrowJSON)
+
+	http.HandleFunc("/predict/", func(w http.ResponseWriter, r *http.Request) {
+		dateStr := strings.TrimPrefix(r.URL.Path, "/predict/")
+		if dateStr == "" {
+			w.Header().Set("Content-Type", "application/json")
+			enc := json.NewEncoder(w)
+			enc.SetIndent("", "  ")
+			enc.Encode(predictor.PredictTomorrow())
+			return
+		}
+		target, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			http.Error(w, "Invalid date format. Use YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		enc.Encode(predictor.PredictForDate(target))
+	})
+
+	http.HandleFunc("/predict", serveTomorrowJSON)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

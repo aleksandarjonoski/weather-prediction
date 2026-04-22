@@ -70,6 +70,14 @@ Starts a server on `:8080` with these endpoints:
 | `GET /predict/tomorrow`   | JSON forecast for tomorrow        |
 | `GET /predict/YYYY-MM-DD` | JSON forecast for a specific date |
 
+## Training set
+
+![image](https://github.com/user-attachments/assets/caf52962-4d57-4ecb-be1b-85afad21bdb6)
+
+## Test set (33%)
+
+![image](https://github.com/user-attachments/assets/108ddccd-9f85-4a65-aee9-6793e359937d)
+
 ### Limitations
 
 - **Linear regression is too simple for weather** — weather is a nonlinear, chaotic system. A linear model can capture broad seasonal trends but misses complex interactions between variables (e.g., how humidity and pressure jointly affect temperature differently in summer vs winter).

@@ -22,7 +22,7 @@ Server running on http://localhost:8080
   curl localhost:8080/predict/2026-05-15         # JSON output (specific date)
 ```
 
-## How it works
+### How it works
 
 `w-prediction.go` predicts weather for Kavadarci using linear regression trained on ~46 years of historical data (1979–2024) from OpenWeather.
 
@@ -70,7 +70,7 @@ Starts a server on `:8080` with these endpoints:
 | `GET /predict/tomorrow`   | JSON forecast for tomorrow        |
 | `GET /predict/YYYY-MM-DD` | JSON forecast for a specific date |
 
-## Training set
+### Training set
 
 Data split 67/33 chronologically - first 67% of daily records (roughly 1979 through mid-2009) used to fit the regression weights. The plot overlays predicted vs actual daily temperature across the fitted range. Tight alignment along the diagonal confirms the model captures the dominant seasonal cycle, but scatter around the line reveals residual noise the linear model cannot explain - cold snaps, heat waves, multi-day anomalies.
 
@@ -78,7 +78,7 @@ Training error is the **optimistic** bound: if the model does poorly here, it wi
 
 ![image](https://github.com/user-attachments/assets/caf52962-4d57-4ecb-be1b-85afad21bdb6)
 
-## Test set (33%)
+### Test set (33%)
 
 Remaining 33% (roughly mid-2009 through 2024) held out during training, used only for evaluation. The plot shows predictions on unseen days - measures how well the model generalizes beyond data it memorized during fitting.
 
